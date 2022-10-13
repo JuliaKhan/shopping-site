@@ -6,10 +6,11 @@ put melons in a shopping cart.
 Authors: Joel Burton, Christian Fernandez, Meggie Mahnken, Katie Byers.
 """
 
-from flask import Flask, render_template, redirect, flash
+from flask import Flask, render_template, redirect, flash, session, request
 import jinja2
 
 import melons
+from customers import Customer
 
 app = Flask(__name__)
 
@@ -26,6 +27,13 @@ app.jinja_env.undefined = jinja2.StrictUndefined
 # more useful (you should remove this line in production though)
 app.config['PRESERVE_CONTEXT_ON_EXCEPTION'] = True
 
+customer_dict = {}
+
+for line in open('customers.txt'):
+    line = line.rstrip()
+    (first, last, email, password) = line.split('|')
+    customer = Customer(first, last, email, password)
+    customer_dict[customer.email] = customer
 
 @app.route("/")
 def index():
@@ -50,7 +58,7 @@ def show_melon(melon_id):
     Show all info about a melon. Also, provide a button to buy that melon.
     """
 
-    melon = melons.get_by_id("meli")
+    melon = melons.get_by_id(melon_id)  #updated to melon_id from 'meli'
     print(melon)
     return render_template("melon_details.html",
                            display_melon=melon)
@@ -75,7 +83,16 @@ def add_to_cart(melon_id):
     # - flash a success message
     # - redirect the user to the cart page
 
-    return "Oops! This needs to be implemented!"
+    session['cart'][melon_id] = session['cart'].get(melon_id, {'qty': 0, 
+    'name': melons.get_by_id(melon_id).common_name, 
+    'price': melons.get_by_id(melon_id).price})
+    session['cart'][melon_id]['qty'] += 1
+    session['total'] = session.get('total', 0)
+    session['total'] += session['cart'][melon_id]['price']
+
+    session.modified = True
+
+    return render_template("cart.html")
 
 
 @app.route("/cart")
@@ -132,7 +149,22 @@ def process_login():
     # - if they don't, flash a failure message and redirect back to "/login"
     # - do the same if a Customer with that email doesn't exist
 
-    return "Oops! This needs to be implemented"
+    email = request.form.get('email')
+    password = request.form.get('password')
+    customer = customer_dict.get(email, None)
+
+    if customer == None:
+        flash('email not found')
+        return render_template("login.html")
+
+    elif password != customer.password:
+        flash('password incorrect')
+        return render_template("login.html")
+
+    else:
+        flash(f'Logged in as {customer.name}')
+        session['cart'] = {}
+        return render_template("login.html")
 
 
 @app.route("/checkout")
